@@ -1,0 +1,5 @@
+packrat/lib*/
+posts/*cache/
+posts/*files/
+cache/
+figure/
