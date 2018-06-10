@@ -3,3 +3,4 @@ posts/*cache/
 posts/*files/
 cache/
 figure/
+posts/*.html
