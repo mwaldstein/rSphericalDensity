@@ -1,0 +1,258 @@
+---
+title: HiRise Observations of Mars
+author: "Micah J Waldstein"
+output:
+  html_document:
+    fig_width: 8.5
+    fig_align: "center"
+    fig_show: "hold"
+    cache: TRUE
+    toc: FALSE
+    self_contained: FALSE
+    results: "hold"
+---
+```{r set_seed, echo = F}
+# Ensure stable output
+set.seed(7035)
+```
+*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
+some things wrong or at very least there are certainly more efficient ways to
+go about things. Feedback always appreciated!*
+
+After
+[two](https://micah.waldste.in/blog/2018/06/introduction-to-spherical-densities-in-r/)
+[posts]()
+on how to analyze the density of points on a globe, we get to what I was really
+curious about - the density of images of Mars made by
+[HiRISE](https://hirise.lpl.arizona.edu/) on the
+[Mars Reconnaissance Orbiter](https://en.wikipedia.org/wiki/Mars_Reconnaissance_Orbiter).
+
+All the records of the (still ongoing) mission are available publicly from the
+[Planetary Data System](https://pds.jpl.nasa.gov/index.shtml), specifically
+[here](https://hirise-pds.lpl.arizona.edu/PDS/).
+
+I'll be using a few datasets in this analysis:
+ * [RDRCUMINDEX.LBL](https://hirise-pds.lpl.arizona.edu/PDS/INDEX/RDRCUMINDEX.LBL) -
+   describes the fields of the Reduced Data Records (RDR), where images have
+   been corrected and geometrically mapped. In pds3 format.
+ * [RDRCUMINDEX.TAB](https://hirise-pds.lpl.arizona.edu/PDS/INDEX/RDRCUMINDEX.TAB) -
+   A csv with all the observations.
+
+We'll be using all the tricks I covered in my posts on spherical densities and
+the [pds3 library](https://github.com/mwaldstein/pds3) I created and maintain.
+
+# Set-Up
+
+First, we'll make use of a number of libraries and setup our plotting
+environment and the pds3 reader:
+```{r libraries, message = F}
+library(rgdal)       # For coordinate transforms
+library(sp)          # For plotting grid images
+library(sf)
+library(lwgeom)
+library(Directional) # For spherical density functions
+library(raster)
+library(pds3)
+```
+
+## Observation Data
+
+First, we'll read in the observations and the column labels. We'll also pull
+out the positions so we have a simple dataset ready to go. Finally we'll create
+a `SpatialPoints` object for plotting.
+
+```{r observation_data, cache = TRUE}
+  header_label <- pds3_read(file.path("..", "data", "RDRCUMINDEX.LBL"))
+  headers <- do.call(rbind, header_label$odl$RDR_INDEX_TABLE$COLUMN)
+  head(headers)
+
+  observations <- read.table(file.path("..", "data", "RDRCUMINDEX.TAB"),
+                             sep = ",")
+  names(observations) <- unlist(headers[,1])
+  head(observations)
+
+  positions <- observations[,c("CORNER1_LONGITUDE", "CORNER1_LATITUDE")]
+  names(positions) <- c("lon", "lat")
+  positions$lon[positions$lon < 0] <- 360 + positions$lon[positions$lon < 0]
+  positions$lon <- positions$lon - 180
+
+  sd_points <- SpatialPoints(positions,
+                             proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs"))
+```
+
+## Calculate Densities
+
+```{r basic_plot}
+grid.size <- 60
+r.template <- raster(extent(sd_points), nrow = grid.size, ncol = grid.size,
+                     crs = "+proj=longlat +datum=WGS84")
+r <- rasterize(sd_points, r.template, field = 1, fun = "count")
+
+plot(r)
+plot(gridlines(r), add = TRUE, col = "grey30", alpha = .1)
+contour(r, add = TRUE)
+```
+
+## Using Polygons
+
+We'll use raster data again, but we'll immediately convert it into a grid of
+square polygons which we can then project
+
+```{r obs_projected}
+r2 <- r
+# We'll manually colorize
+r2 <- cut(r2,
+          pretty(r2[], 50),
+          include.lowest = F)
+color.vals <- rev(terrain.colors(50))
+pol <- rasterToPolygons(r2)
+crs1 <- "+proj=wintri"
+pol.crs1 <- spTransform(pol, crs1)
+plot(pol.crs1, col=color.vals[r2[]], border = NA)
+plot(gridlines(pol.crs1), add = TRUE, col = "grey30", alpha = .1)
+```
+
+Now that looks good!
+
+One thing to keep in mind however - because our polygons are rectangular in equal
+coordinates, they will warp and distort as a projection gets more severe. In
+our animation, you can see what I mean
+
+## Animating
+
+We're projecting into an orthographic projection to simulate the rotating
+globe. A few things you'll see in the code where I jump through hoops:
+ * **Cropping the top** - If I leave the top polygons in place, they bunch up
+   in an ugly fashion
+ * **Making features valid** - Both for the world and our heatmap polygons I
+   jump through hoops to make sure only valid polygons get through to the final
+   plot.
+
+
+```{r earthquake_ani, fig.show='animate', ffmpeg.format='gif', fig.width = 4.5, interval = .2, warning=F, eval = F}
+r3 <- raster(sGDF)
+
+# Crop down because projecting the poles causes problems
+r.crop <- res(r3)
+rc <- crop(r3, extent(-180, 180,
+                      -90 + r.crop[2], 90 - r.crop[2]))
+pol <- rasterToPolygons(rc)
+pol.breaks <- pretty(pol$att, 20)
+pol.colors <- rev(terrain.colors(length(pol.breaks) - 1))
+# Make the lowest color transparent
+substr(pol.colors[1], 8, 9) <- "00"
+
+par_old <- par()
+par(mar = c(0, 0, 0, 0))
+n.frames <- 30
+grad <- st_graticule(ndiscr = 1e4)
+for (i in 1:n.frames) {
+  long <- -180 + (i - 1) * 360 / n.frames
+  crs.ani <- paste0("+proj=ortho +lat_0=0 +lon_0=", long)
+  grad.ani <- st_geometry(st_transform(grad, crs.ani))
+
+  world.ani <- st_transform(st_geometry(world), crs = crs.ani)
+  world.ani <- st_make_valid(world.ani)
+  # We don't want the points
+  world.ani <- world.ani[st_geometry_type(world.ani) %in% c('POLYGON',
+                                                            'MULTIPOLYGON')]
+
+  # There are inevitable some bad polygons out of the transform
+  world.ani <- world.ani[st_is_valid(world.ani)]
+
+  pol.ani <- st_transform(as(pol, "sf"), crs.ani)
+  pol.ani.geo <- lwgeom::st_make_valid(pol.ani)
+  pol.ani.geo <- pol.ani.geo[st_geometry_type(pol.ani.geo) %in% c('POLYGON',
+                                                                  'MULTIPOLYGON',
+                                                                  'GEOMETRYCOLLECTION'), ]
+  pol.ani.geo <- pol.ani.geo[st_is_valid(pol.ani.geo), ]
+  pol.ani.geo <- pol.ani.geo[!st_is_empty(pol.ani.geo), ]
+
+  plot(grad.ani, col = "black")
+  plot(world.ani, add = TRUE, col = "grey30", border = "grey")
+  plot(pol.ani.geo, border = NA, breaks = pol.breaks, pal = pol.colors,
+       add = TRUE, main = NA, key.pos = NULL)
+}
+par(par_old)
+```
+
+Looks pretty good, but we do have some interesting world map problems with
+countries popping out as they reach the edge... Something to investigate
+another day.
+
+## Final Notes
+
+In both these examples we've used global data as it shows the problems of using
+"traditional" density estimators, but the same issue exists at all scales. It
+is just a question of when a simpler approximation is reasonable.
+
+You can also see a bit of blockiness which we could reduce with an increase in
+grid size, but that will be very dependent on need.
+
+Next, some real data...
+
+# Appendix
+
+## Spherical Density Function
+
+This calculates a grid of densities which can then be used with `geom_contour`.
+The code basically comes directly from [Directional's
+vmf.kerncontour](https://rdrr.io/cran/Directional/man/vmf.kerncontour.html),
+only returning a data.frame instead of actually plotting the output.
+
+```{r vmf_kerncontour}
+vmf.kerncontour.new <- function(u, thumb = "none", ret.all = FALSE, full = FALSE,
+                            ngrid = 100) {
+  ## u contains the data in latitude and longitude
+  ## the first column is the latitude and the
+  ## second column is the longitude
+  ## thumb is either 'none' (default), or 'rot' (Garcia-Portugues, 2013)
+  ## ret.all if set to TRUE returns a matrix with latitude, longitude and density
+  ## full if set to TRUE calculates densities for the full sphere, otherwise
+  ##   using extents of the data
+  ## ngrid specifies the number of points taken at each axis
+  n <- dim(u)[1]  ## sample size
+  x <- euclid(u)
+
+  if (thumb == "none") {
+    h <- as.numeric( vmfkde.tune(x, low = 0.1, up = 1)[1] )
+  } else if (thumb == "rot") {
+    k <- vmf(x)$kappa
+    h <- ( (8 * sinh(k)^2) / (k * n * ( (1 + 4 * k^2) * sinh(2 * k) -
+    2 * k * cosh(2 * k)) ) ) ^ ( 1/6 )
+  }
+
+  if (full) {
+    x1 <- seq( 0, 180, length = ngrid )  ## latitude
+    x2 <- seq( 0, 360, length = ngrid )  ## longitude
+  } else {
+    x1 <- seq( min(u[, 1]) - 5, max(u[, 1]) + 5, length = ngrid )  ## latitude
+    x2 <- seq( min(u[, 2]) - 5, max(u[, 2]) + 5, length = ngrid )  ## longitude
+  }
+  cpk <- 1 / (  ( h^2)^0.5 *(2 * pi)^1.5 * besselI(1/h^2, 0.5) )
+  mat <- matrix(nrow = ngrid, ncol = ngrid)
+
+  for (i in 1:ngrid) {
+    for (j in 1:ngrid) {
+      y <- euclid( c(x1[i], x2[j]) )
+      a <- as.vector( tcrossprod(x, y / h^2) )
+      can <- sum( exp(a + log(cpk)) ) / ngrid
+      if (abs(can) < Inf)   mat[i, j] <- can
+    }
+  }
+
+  if (ret.all) {
+    return(list(Lat = x1, Long = x2, h = h, d = mat))
+  } else {
+    contour(mat$Lat, mat$Long, mat, nlevels = 10, col = 2, xlab = "Latitude",
+            ylab = "Longitude")
+    points(u[, 1], u[, 2])
+  }
+}
+```
+
+## References
+
+ * McEwen, A., Mars Reconnaissance Orbiter High Resolution Imaging Science
+   Experiment, Reduced Data Record, MRO-M-HIRISE-3-RDR-V1.0, NASA Planetary Data
+   System, 2007.
