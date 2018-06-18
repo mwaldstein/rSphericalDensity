@@ -37,6 +37,7 @@ library(lwgeom)
 library(Directional) # For spherical density functions
 library(spData)      # worldmap
 library(raster)
+library(magick)      # for animating
 ```
 
 We'll also use the same `vmf_density_grid` function we introduced in the Intro
@@ -162,7 +163,7 @@ globe. A few things you'll see in the code where I jump through hoops:
    plot.
 
 
-```{r earthquake_ani, fig.show='animate', ffmpeg.format='gif', fig.width = 4.5, interval = .2, warning=F}
+```{r earthquake_ani, warning=F}
 r3 <- raster(sGDF)
 
 # Crop down because projecting the poles causes problems
@@ -175,9 +176,9 @@ pol.colors <- rev(terrain.colors(length(pol.breaks) - 1))
 # Make the lowest color transparent
 substr(pol.colors[1], 8, 9) <- "00"
 
-par_old <- par()
-par(mar = c(0, 0, 0, 0))
 n.frames <- 30
+img <- image_graph(400, 400, res = 96)
+par(mar = c(0, 0, 0, 0))
 grad <- st_graticule(ndiscr = 1e4)
 for (i in 1:n.frames) {
   long <- -180 + (i - 1) * 360 / n.frames
@@ -206,7 +207,8 @@ for (i in 1:n.frames) {
   plot(pol.ani.geo, border = NA, breaks = pol.breaks, pal = pol.colors,
        add = TRUE, main = NA, key.pos = NULL)
 }
-par(par_old)
+msg <- dev.off()
+image_animate(img, fps = 10)
 ```
 
 Looks pretty good, but we do have some interesting world map problems with
