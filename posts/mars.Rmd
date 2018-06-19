@@ -66,7 +66,7 @@ a `SpatialPoints` object for plotting.
   headers <- do.call(rbind, header_label$odl$RDR_INDEX_TABLE$COLUMN)
   head(headers)
 
-  observations <- read.table(file.path("..", "data", "RDRCUMINDEX.TAB"),
+  observations <- read.table(file.path("..", "data", "RDRCUMINDEX.TAB.bz2"),
                              sep = ",")
   names(observations) <- unlist(headers[,1])
   head(observations)
