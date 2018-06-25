@@ -182,14 +182,7 @@ another day.
 
 ## Final Notes
 
-In both these examples we've used global data as it shows the problems of using
-"traditional" density estimators, but the same issue exists at all scales. It
-is just a question of when a simpler approximation is reasonable.
-
-You can also see a bit of blockiness which we could reduce with an increase in
-grid size, but that will be very dependent on need.
-
-Next, some real data...
+If you want to explore the code yourself, everything is on [github here](https://github.com/mwaldstein/rSphericalDensity).
 
 # Appendix
 

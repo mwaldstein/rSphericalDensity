@@ -276,6 +276,8 @@ do. We've got a few more posts coming:
  * **More Real Examples** - I mentioned I had an actual project I was curious
    about, right?
 
+If you want to explore the code yourself, everything is on [github here](https://github.com/mwaldstein/rSphericalDensity).
+
 # Appendix
 
 ## Spherical Density Function
