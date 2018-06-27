@@ -10,20 +10,27 @@ output:
     toc: FALSE
     self_contained: FALSE
     results: "hold"
+date: 2018-06-10T21:13:14-05:00
+url: /blog/2018/06/introduction-to-spherical-densities-in-r
+categories:
+  - RStats
+tags: ["R Markdown", "plot", "regression"]
+draft: false
+type: post
 ---
 ```{r set_seed, echo = F}
 # Ensure stable output
 set.seed(7035)
 ```
-*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
-some things wrong or at very least there are certainly more efficient ways to
-go about things. Feedback always appreciated!*
-
 It always happens... I get interested in what I think will be a small data
 project to scratch some itch and end up down a deep rabbit hole. In this case,
 a passing interest in the geographic distribution of some samples (more on that
 in a future post) led to a deep dive into spherical distributions and
 densities.
+
+*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
+some things wrong or at very least there are certainly more efficient ways to
+go about things. Feedback always appreciated!*
 
 # Motivation
 

@@ -10,20 +10,27 @@ output:
     toc: FALSE
     self_contained: FALSE
     results: "hold"
+
+date: 2018-06-15T21:13:14-05:00
+categories:
+  - RStats
+tags: ["R Markdown", "plot"]
+draft: false
+type: post
 ---
 ```{r set_seed, echo = F}
 # Ensure stable output
 set.seed(7035)
 ```
-*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
-some things wrong or at very least there are certainly more efficient ways to
-go about things. Feedback always appreciated!*
-
 [Last time](https://micah.waldste.in/blog/2018/06/introduction-to-spherical-densities-in-r/)
 we made contour maps of densities of points on a globe, now it is
 time to take another step and make heatmaps. We created all the data we needed
 when creating the contours, but heatmaps add new challenges of dealing with
 large amounts of raster and polygon data. Lets get to it.
+
+*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
+some things wrong or at very least there are certainly more efficient ways to
+go about things. Feedback always appreciated!*
 
 # Set-Up
 
@@ -106,6 +113,7 @@ though... We can't just re-project our SpatialGridDataFrame - it gets
 interpolated into points, losing our nice pretty smooth heatmap.
 
 There are two real options for us:
+
  * Convert to raster data, then project the raster
  * Convert to raster, convert to polygons, project the polygons
 
@@ -156,6 +164,7 @@ our animation, you can see what I mean
 
 We're projecting into an orthographic projection to simulate the rotating
 globe. A few things you'll see in the code where I jump through hoops:
+
  * **Cropping the top** - If I leave the top polygons in place, they bunch up
    in an ugly fashion
  * **Making features valid** - Both for the world and our heatmap polygons I
