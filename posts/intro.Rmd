@@ -17,6 +17,8 @@ categories:
 tags: ["R Markdown", "plot", "regression"]
 draft: false
 type: post
+header:
+  image: "/external/rSphericalDensity/posts/intro_files/figure-html/earthquake_plot-1.png"
 ---
 ```{r set_seed, echo = F}
 # Ensure stable output

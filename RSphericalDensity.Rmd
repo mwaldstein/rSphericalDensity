@@ -4,6 +4,12 @@ author: "Micah J Waldstein"
 output:
   html_document:
     toc: TRUE
+
+tags: []
+date: "2018-06-26T00:00:00"
+category:
+ - Uncategorized
+type: post
 ---
 
 ## Motivation
@@ -54,6 +60,7 @@ g
 Because we're pretty far North, the points spread out across the pole. Now lets
 plot densities, using both ggplot's `stat_density_2d`, a traditional cartesian
 density, and the spherical density kernel from the Density package.
+
 ```{r ref.label="vmf_density_grid", echo=FALSE}
 ```
 

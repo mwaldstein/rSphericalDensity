@@ -17,6 +17,8 @@ categories:
 tags: ["R Markdown", "plot"]
 draft: false
 type: post
+header:
+  image: "/external/rSphericalDensity/posts/heatmap_files/figure-html/earthquakes_projected-1.png"
 ---
 ```{r set_seed, echo = F}
 # Ensure stable output
@@ -45,6 +47,7 @@ library(Directional) # For spherical density functions
 library(spData)      # worldmap
 library(raster)
 library(magick)      # for animating
+par(bg = NA)
 ```
 
 We'll also use the same `vmf_density_grid` function we introduced in the Intro
@@ -149,6 +152,7 @@ pol <- rasterToPolygons(r2)
 crs1 <- "+proj=wintri"
 world.crs1 <- st_transform_proj(world, crs = crs1)
 pol.crs1 <- spTransform(pol, crs1)
+par(mar = c(0, 0, 0, 0))
 plot(pol.crs1, col=color.vals[r2[]], border = NA)
 # plot(gridlines(sgdf.crs1), add = TRUE, col = "grey30", alpha = .1)
 plot(st_geometry(world.crs1), add = TRUE, col = NA, border = "grey")

@@ -120,15 +120,6 @@ our animation, you can see what I mean
 
 ## Animating
 
-We're projecting into an orthographic projection to simulate the rotating
-globe. A few things you'll see in the code where I jump through hoops:
- * **Cropping the top** - If I leave the top polygons in place, they bunch up
-   in an ugly fashion
- * **Making features valid** - Both for the world and our heatmap polygons I
-   jump through hoops to make sure only valid polygons get through to the final
-   plot.
-
-
 ```{r earthquake_ani, fig.show='animate', ffmpeg.format='gif', fig.width = 4.5, interval = .2, warning=F, eval = F}
 r3 <- raster(sGDF)
 
