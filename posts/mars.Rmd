@@ -10,15 +10,19 @@ output:
     toc: FALSE
     self_contained: FALSE
     results: "hold"
+date: 2018-07-08
+categories:
+  - RStats
+tags: ["R Markdown", "plot"]
+draft: false
+type: post
+header:
+  image: "/external/rSphericalDensity/posts/mars_files/figure-html/ani-1.gif"
 ---
 ```{r set_seed, echo = F}
 # Ensure stable output
 set.seed(7035)
 ```
-*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
-some things wrong or at very least there are certainly more efficient ways to
-go about things. Feedback always appreciated!*
-
 After
 [two](https://micah.waldste.in/blog/2018/06/introduction-to-spherical-densities-in-r/)
 [posts]()
@@ -32,6 +36,7 @@ All the records of the (still ongoing) mission are available publicly from the
 [here](https://hirise-pds.lpl.arizona.edu/PDS/).
 
 I'll be using a few datasets in this analysis:
+
  * [RDRCUMINDEX.LBL](https://hirise-pds.lpl.arizona.edu/PDS/INDEX/RDRCUMINDEX.LBL) -
    describes the fields of the Reduced Data Records (RDR), where images have
    been corrected and geometrically mapped. In pds3 format.
@@ -40,6 +45,18 @@ I'll be using a few datasets in this analysis:
 
 We'll be using all the tricks I covered in my posts on spherical densities and
 the [pds3 library](https://github.com/mwaldstein/pds3) I created and maintain.
+
+This was supposed to follow the standard pattern to hobbiest data science:
+
+ * Find an interesting dataset
+ * Apply a "standard" set of techniques
+ * Tell the world!
+
+Unfortunately, obstacles were encountered...
+
+*DISCLAIMER: While I know a thing or two, there's a reasonable chance I got
+some things wrong or at very least there are certainly more efficient ways to
+go about things. Feedback always appreciated!*
 
 # Set-Up
 
@@ -53,6 +70,7 @@ library(lwgeom)
 library(Directional) # For spherical density functions
 library(raster)
 library(pds3)
+library(magick)      # for animating
 ```
 
 ## Observation Data
@@ -62,66 +80,124 @@ out the positions so we have a simple dataset ready to go. Finally we'll create
 a `SpatialPoints` object for plotting.
 
 ```{r observation_data, cache = TRUE}
-  header_label <- pds3_read(file.path("..", "data", "RDRCUMINDEX.LBL"))
-  headers <- do.call(rbind, header_label$odl$RDR_INDEX_TABLE$COLUMN)
-  head(headers)
+header_label <- pds3_read(file.path("..", "data", "RDRCUMINDEX.LBL"))
+headers <- do.call(rbind, header_label$odl$RDR_INDEX_TABLE$COLUMN)
+head(headers)
 
-  observations <- read.table(file.path("..", "data", "RDRCUMINDEX.TAB.bz2"),
-                             sep = ",")
-  names(observations) <- unlist(headers[,1])
-  head(observations)
+observations <- read.table(file.path("..", "data", "RDRCUMINDEX.TAB.bz2"),
+                           sep = ",")
+names(observations) <- unlist(headers[,1])
+head(observations)
 
-  positions <- observations[,c("CORNER1_LONGITUDE", "CORNER1_LATITUDE")]
-  names(positions) <- c("lon", "lat")
-  positions$lon[positions$lon < 0] <- 360 + positions$lon[positions$lon < 0]
-  positions$lon <- positions$lon - 180
-
-  sd_points <- SpatialPoints(positions,
-                             proj4string = CRS("+proj=longlat +datum=WGS84 +no_defs"))
+positions <- observations[,c("CORNER1_LONGITUDE", "CORNER1_LATITUDE")]
+names(positions) <- c("lon", "lat")
+positions$lon[positions$lon < 0] <- 360 + positions$lon[positions$lon < 0]
+positions$lon <- positions$lon - 180
 ```
 
 ## Calculate Densities
 
-```{r basic_plot}
-grid.size <- 60
-r.template <- raster(extent(sd_points), nrow = grid.size, ncol = grid.size,
-                     crs = "+proj=longlat +datum=WGS84")
-r <- rasterize(sd_points, r.template, field = 1, fun = "count")
+I'll use the `vmf_density_grid` function I introduced in the prior posts,
+documented here in the appendix
 
-plot(r)
-plot(gridlines(r), add = TRUE, col = "grey30", alpha = .1)
-contour(r, add = TRUE)
+```{r ref.label="vmf_kerncontour", echo=FALSE}
+```
+```{r ref.label="vmf_density_grid", echo=FALSE}
 ```
 
-## Using Polygons
+Here's what I tried initially:
+```{r basic_plot, eval=F}
+grid.size <- 100
+densities <- vmf_density_grid(positions[,c("lat",
+                                           "lon")],
+                              ngrid = grid.size)
+```
+```
+#>  Error: cannot allocate vector of size 82.2 Gb
+```
 
-We'll use raster data again, but we'll immediately convert it into a grid of
-square polygons which we can then project
+Huh. OK, so there are `r nrow(positions)` rows in `positions` so it makes sense
+that things would be difficult. At some point an n by n matrix is created
+which causes the memory allocation issue.
+
+While I could go and rent an AWS instance with enough memory to run the whole
+thing, I'm going to cheat for the time being, running a number of density
+calculations then combining them. I cannot stress enough, **this is a very
+messy hack**.
+
+First, we'll split the dataset into a number of random groups, then calculate
+the density grid for each group.
+
+```{r split_sets, cache=T}
+grid.size <- 100
+nGroups <- 15
+groupAssignment <- sample(rep(1:nGroups, ceiling(nrow(positions)/nGroups)))
+groupAssignment <- groupAssignment[1:nrow(positions)]
+groups <- split(positions, groupAssignment)
+densities <- lapply(groups, function(pos) {
+  # Only return the Density, as we're doing the same Lat/Lon range
+  vmf_density_grid(pos[,c("lat", "lon")], ngrid = grid.size)$Density
+})
+```
+
+Now that we've run the densities, we need to combine them. We'll bind the list
+of densities into columns, then use apply to reduce to a single vector of
+densities. We'll take a look at different methds for combining the matrices
+
+```{r, split_sets_combine}
+funs <- list("Sum" = sum, "Mean" = mean, "Max" = max, "Min" = min)
+combined_densities <- lapply(funs, function(f) {
+  combined_density <- apply(do.call(cbind, densities), 1, f)
+  density_matrix <- matrix(combined_density, nrow = grid.size)
+  density_matrix <- t(apply(density_matrix, 2, rev))
+  gridVals <- data.frame(att=as.vector(density_matrix))
+  gt <- GridTopology(cellcentre.offset = c(-180 + 180 / grid.size,
+                                           -90 + 90 / grid.size),
+                     cellsize = c( 360 / grid.size, 180 / grid.size),
+                     cells.dim = c(grid.size, grid.size))
+  SpatialGridDataFrame(gt,
+                       data = gridVals,
+                       proj = "+proj=longlat +datum=WGS84 +no_defs")
+})
+
+img <- image_graph()
+par(mar = c(0, 0, 0, 0))
+for (i in names(funs)) {
+  plot(combined_densities[[i]], main = i, what="image")
+  plot(gridlines(combined_densities[[i]]), add = TRUE, col = "grey30", alpha = .1)
+}
+msg <- dev.off()
+image_animate(img, fps = 1)
+```
+
+The good news is taht on the scale we're interested in, it seems we can't go
+too far wrong. We'll use `max` as it seems to give us the most detail.
+
+
+## Back to the show...
 
 ```{r obs_projected}
-r2 <- r
+r <- raster(combined_densities$Max)
+cont <- rasterToContour(r)
 # We'll manually colorize
-r2 <- cut(r2,
-          pretty(r2[], 50),
+r2 <- cut(r,
+          pretty(r[], 50),
           include.lowest = F)
-color.vals <- rev(terrain.colors(50))
-pol <- rasterToPolygons(r2)
+color.vals <- bpy.colors(50)
+pol <- rasterToPolygons(r)
 crs1 <- "+proj=wintri"
 pol.crs1 <- spTransform(pol, crs1)
-plot(pol.crs1, col=color.vals[r2[]], border = NA)
-plot(gridlines(pol.crs1), add = TRUE, col = "grey30", alpha = .1)
+cont.crs1 <- spTransform(cont, crs1)
+par(mar = c(0, 0, 0, 0))
+plot(pol.crs1, col=color.vals[r[]], border = NA)
+plot(cont.crs1, col="grey30", alpha=.1, add = TRUE)
+
 ```
-
-Now that looks good!
-
-One thing to keep in mind however - because our polygons are rectangular in equal
-coordinates, they will warp and distort as a projection gets more severe. In
-our animation, you can see what I mean
 
 ## Animating
 
-```{r earthquake_ani, fig.show='animate', ffmpeg.format='gif', fig.width = 4.5, interval = .2, warning=F, eval = F}
-r3 <- raster(sGDF)
+```{r ani, warning=F}
+r3 <- raster(combined_densities$Max)
 
 # Crop down because projecting the poles causes problems
 r.crop <- res(r3)
@@ -129,27 +205,17 @@ rc <- crop(r3, extent(-180, 180,
                       -90 + r.crop[2], 90 - r.crop[2]))
 pol <- rasterToPolygons(rc)
 pol.breaks <- pretty(pol$att, 20)
-pol.colors <- rev(terrain.colors(length(pol.breaks) - 1))
-# Make the lowest color transparent
-substr(pol.colors[1], 8, 9) <- "00"
+pol.colors <- bpy.colors(length(pol.breaks) - 1)
 
 par_old <- par()
-par(mar = c(0, 0, 0, 0))
 n.frames <- 30
+img <- image_graph(400, 400, res = 96)
+par(mar = c(0, 0, 0, 0))
 grad <- st_graticule(ndiscr = 1e4)
 for (i in 1:n.frames) {
   long <- -180 + (i - 1) * 360 / n.frames
   crs.ani <- paste0("+proj=ortho +lat_0=0 +lon_0=", long)
   grad.ani <- st_geometry(st_transform(grad, crs.ani))
-
-  world.ani <- st_transform(st_geometry(world), crs = crs.ani)
-  world.ani <- st_make_valid(world.ani)
-  # We don't want the points
-  world.ani <- world.ani[st_geometry_type(world.ani) %in% c('POLYGON',
-                                                            'MULTIPOLYGON')]
-
-  # There are inevitable some bad polygons out of the transform
-  world.ani <- world.ani[st_is_valid(world.ani)]
 
   pol.ani <- st_transform(as(pol, "sf"), crs.ani)
   pol.ani.geo <- lwgeom::st_make_valid(pol.ani)
@@ -160,11 +226,11 @@ for (i in 1:n.frames) {
   pol.ani.geo <- pol.ani.geo[!st_is_empty(pol.ani.geo), ]
 
   plot(grad.ani, col = "black")
-  plot(world.ani, add = TRUE, col = "grey30", border = "grey")
   plot(pol.ani.geo, border = NA, breaks = pol.breaks, pal = pol.colors,
        add = TRUE, main = NA, key.pos = NULL)
 }
-par(par_old)
+msg <- dev.off()
+image_animate(img, fps = 10)
 ```
 
 Looks pretty good, but we do have some interesting world map problems with
@@ -234,6 +300,23 @@ vmf.kerncontour.new <- function(u, thumb = "none", ret.all = FALSE, full = FALSE
   }
 }
 ```
+
+```{r vmf_density_grid}
+vmf_density_grid <- function(u, ngrid = 100) {
+  # Translate to (0,180) and (0,360)
+  u[,1] <- u[,1] + 90
+  u[,2] <- u[,2] + 180
+  res <- vmf.kerncontour.new(u, thumb = "none", ret.all = T, full = T,
+                             ngrid = ngrid)
+
+  # Translate back to (-90, 90) and (-180, 180) and create a grid of
+  # coordinates
+  ret <- expand.grid(Lat = res$Lat - 90, Long = res$Long - 180)
+  ret$Density = c(res$d)
+  ret
+}
+```
+
 
 ## References
 
