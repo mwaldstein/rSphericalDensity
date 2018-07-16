@@ -14,7 +14,7 @@ date: 2018-07-08
 categories:
   - RStats
 tags: ["R Markdown", "plot"]
-draft: false
+draft: true
 type: post
 header:
   image: "/external/rSphericalDensity/posts/mars_files/figure-html/ani-1.gif"
