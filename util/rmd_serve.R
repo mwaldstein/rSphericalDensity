@@ -4,7 +4,8 @@ args <- commandArgs(trailingOnly = TRUE)
 directory <- if (length(args) > 0) {
   args[1]
 } else {
-  "posts"
+  # "posts"
+  "."
 }
 
 port <- if (length(args) > 1) {

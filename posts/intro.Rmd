@@ -67,6 +67,7 @@ library(Directional) # For spherical density functions
 library(maps)        # vector maps of the world
 library(hrbrthemes)  # hrbrmstr themes
 library(magick)      # For animation
+library(mapproj)     # Needed for projection
 
 # And set some theme defaults
 theme_set(theme_ipsum())
