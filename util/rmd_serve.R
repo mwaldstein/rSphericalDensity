@@ -4,8 +4,7 @@ args <- commandArgs(trailingOnly = TRUE)
 directory <- if (length(args) > 0) {
   args[1]
 } else {
-  # "posts"
-  "."
+  "posts"
 }
 
 port <- if (length(args) > 1) {
@@ -19,4 +18,6 @@ if (!dir.exists(directory)) {
 }
 
 library(servr)
-rmdv2(dir = directory, port = port)
+# Building in-session because when run independently, misses .Rprofile and
+# as a result misses the packrat library.
+rmdv2(dir = directory, port = port, in_session = T)

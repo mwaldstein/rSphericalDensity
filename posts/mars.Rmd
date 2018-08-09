@@ -100,8 +100,6 @@ positions$lon <- positions$lon - 180
 I'll use the `vmf_density_grid` function I introduced in the prior posts,
 documented here in the appendix
 
-```{r ref.label="vmf_kerncontour", echo=FALSE}
-```
 ```{r ref.label="vmf_density_grid", echo=FALSE}
 ```
 
@@ -306,13 +304,13 @@ vmf_density_grid <- function(u, ngrid = 100) {
   # Translate to (0,180) and (0,360)
   u[,1] <- u[,1] + 90
   u[,2] <- u[,2] + 180
-  res <- vmf.kerncontour.new(u, thumb = "none", ret.all = T, full = T,
+  res <- vmf.kerncontour(u, thumb = "none", den.ret = T, full = T,
                              ngrid = ngrid)
 
   # Translate back to (-90, 90) and (-180, 180) and create a grid of
   # coordinates
-  ret <- expand.grid(Lat = res$Lat - 90, Long = res$Long - 180)
-  ret$Density = c(res$d)
+  ret <- expand.grid(Lat = res$lat - 90, Long = res$long - 180)
+  ret$Density <- c(res$den)
   ret
 }
 ```
