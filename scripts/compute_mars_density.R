@@ -39,7 +39,7 @@ csf <- function() {
             } else {
                 # RStudio Run Selection
                 # http://stackoverflow.com/a/35842176/2292993
-                return(normalizePath(rstudioapi::getActiveDocumentContext()$path))
+                # return(normalizePath(rstudioapi::getActiveDocumentContext()$path))
             }
         }
     }
